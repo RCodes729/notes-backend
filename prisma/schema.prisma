@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String              @id @db.Char(36)
+  username          String              @unique(map: "uq_users_username") @db.VarChar(50)
+  email             String              @unique(map: "email") @db.VarChar(120)
+  password          String              @db.VarChar(255)
+  name              String?             @db.VarChar(100)
+  password_hash     String              @db.VarChar(255)
+  created_at        DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?           @default(now()) @updatedAt @db.Timestamp(0)
+  activity_logs     activity_logs[]
+  folders           folders[]
+  note_permissions  note_permissions[]
+  note_revisions    note_revisions[]
+  notes             Note[]              @relation("UserNotes")
+  workspace_members workspace_members[]
+  workspaces        workspaces[]
+
+  @@map("users")
+}
+
+model Note {
+  id               String             @id @db.Char(36)
+  workspace_id     String             @db.Char(36)
+  folder_id        String?            @db.Char(36)
+  author_id        String             @db.Char(36)
+  title            String             @db.VarChar(255)
+  content_json     Json?
+  content_text     String?            @db.LongText
+  is_trashed       Boolean            @default(false)
+  trashed_at       DateTime?          @db.Timestamp(0)
+  created_at       DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at       DateTime?          @default(now()) @updatedAt @db.Timestamp(0)
+  note_permissions note_permissions[]
+  note_revisions   note_revisions[]
+  note_tags        note_tags[]
+  author           User               @relation("UserNotes", fields: [author_id], references: [id], onUpdate: NoAction, map: "fk_note_author")
+  folders          folders?           @relation(fields: [folder_id], references: [id], onUpdate: NoAction, map: "fk_note_folder")
+  workspaces       workspaces         @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_note_workspace")
+
+  @@index([folder_id], map: "fk_note_folder")
+  @@index([author_id], map: "idx_notes_author")
+  @@index([updated_at], map: "idx_notes_updated_at")
+  @@index([workspace_id, folder_id], map: "idx_notes_workspace_folder")
+  @@fulltext([title, content_text], map: "ftx_notes_title_content")
+  @@map("notes")
+}
+
+model activity_logs {
+  id           String     @id @db.Char(36)
+  workspace_id String     @db.Char(36)
+  actor_id     String     @db.Char(36)
+  action       String     @db.VarChar(80)
+  entity_type  String     @db.VarChar(40)
+  entity_id    String     @db.Char(36)
+  metadata     Json?
+  created_at   DateTime?  @default(now()) @db.Timestamp(0)
+  users        User       @relation(fields: [actor_id], references: [id], onUpdate: NoAction, map: "fk_log_actor")
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_log_workspace")
+
+  @@index([actor_id], map: "fk_log_actor")
+  @@index([workspace_id, created_at], map: "idx_logs_workspace_created")
+}
+
+model folders {
+  id               String     @id @db.Char(36)
+  workspace_id     String     @db.Char(36)
+  parent_folder_id String?    @db.Char(36)
+  name             String     @db.VarChar(120)
+  created_by       String     @db.Char(36)
+  created_at       DateTime?  @default(now()) @db.Timestamp(0)
+  updated_at       DateTime?  @default(now()) @db.Timestamp(0)
+  users            User       @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_folder_creator")
+  folders          folders?   @relation("foldersTofolders", fields: [parent_folder_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_folder_parent")
+  other_folders    folders[]  @relation("foldersTofolders")
+  workspaces       workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_folder_workspace")
+  notes            Note[]
+
+  @@index([created_by], map: "fk_folder_creator")
+  @@index([parent_folder_id], map: "fk_folder_parent")
+  @@index([workspace_id, parent_folder_id], map: "idx_folders_workspace_parent")
+}
+
+model note_permissions {
+  id         String                @id @db.Char(36)
+  note_id    String                @db.Char(36)
+  user_id    String                @db.Char(36)
+  role       note_permissions_role @default(VIEWER)
+  created_at DateTime?             @default(now()) @db.Timestamp(0)
+  notes      Note                  @relation(fields: [note_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_np_note")
+  users      User                  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_np_user")
+
+  @@unique([note_id, user_id], map: "uq_note_user")
+  @@index([user_id], map: "fk_np_user")
+}
+
+model note_revisions {
+  id                    String    @id @db.Char(36)
+  note_id               String    @db.Char(36)
+  edited_by             String    @db.Char(36)
+  title_snapshot        String    @db.VarChar(255)
+  content_json_snapshot Json?
+  content_text_snapshot String?   @db.LongText
+  created_at            DateTime? @default(now()) @db.Timestamp(0)
+  users                 User      @relation(fields: [edited_by], references: [id], onUpdate: NoAction, map: "fk_rev_editor")
+  notes                 Note      @relation(fields: [note_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_rev_note")
+
+  @@index([edited_by], map: "fk_rev_editor")
+  @@index([note_id, created_at], map: "idx_revisions_note_created")
+}
+
+model note_tags {
+  note_id String @db.Char(36)
+  tag_id  String @db.Char(36)
+  notes   Note   @relation(fields: [note_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_nt_note")
+  tags    tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_nt_tag")
+
+  @@id([note_id, tag_id])
+  @@index([tag_id], map: "fk_nt_tag")
+}
+
+model tags {
+  id           String      @id @db.Char(36)
+  workspace_id String      @db.Char(36)
+  name         String      @db.VarChar(50)
+  created_at   DateTime?   @default(now()) @db.Timestamp(0)
+  note_tags    note_tags[]
+  workspaces   workspaces  @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tag_workspace")
+
+  @@unique([workspace_id, name], map: "uq_tag_workspace_name")
+}
+
+model workspace_members {
+  workspace_id String                 @db.Char(36)
+  user_id      String                 @db.Char(36)
+  role         workspace_members_role @default(VIEWER)
+  joined_at    DateTime?              @default(now()) @db.Timestamp(0)
+  users        User                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_user")
+  workspaces   workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_workspace")
+
+  @@id([workspace_id, user_id])
+  @@index([user_id], map: "fk_wm_user")
+}
+
+model workspaces {
+  id                String              @id @db.Char(36)
+  name              String              @db.VarChar(120)
+  owner_id          String              @db.Char(36)
+  created_at        DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?           @default(now()) @db.Timestamp(0)
+  activity_logs     activity_logs[]
+  folders           folders[]
+  notes             Note[]
+  tags              tags[]
+  workspace_members workspace_members[]
+  users             User                @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_workspace_owner")
+
+  @@index([owner_id], map: "fk_workspace_owner")
+}
+
+enum workspace_members_role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum note_permissions_role {
+  VIEWER
+  COMMENTER
+  EDITOR
+}
