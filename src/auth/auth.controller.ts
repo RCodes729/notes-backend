@@ -21,12 +21,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@Req() req: any) {
-    return this.authService.me(req.user.userId);
+    return this.authService.me(req.user.userId as string);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('change-password')
-  changePassword(@Req() req: any, @Body() body: { oldPassword: string; newPassword: string }) {
-    return this.authService.changePassword(req.user.userId, body.oldPassword, body.newPassword);
+  changePassword(
+    @Req() req: any,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    return this.authService.changePassword(
+      req.user.userId as string,
+      body.oldPassword,
+      body.newPassword,
+    );
   }
 }

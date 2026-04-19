@@ -17,31 +17,32 @@ export class AuthService {
       where: { email: dto.email },
     });
 
-    if (existing) {
-      throw new BadRequestException('Email already in use');
-    }
+    if (existing) throw new BadRequestException('Email already in use');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const user = await this.prisma.user.create({
       data: {
-        name: dto.name,
+        username: dto.name,
         email: dto.email,
-        password: hashedPassword,
+        password_hash: hashedPassword,
       },
       select: {
         id: true,
-        name: true,
+        username: true,
         email: true,
       },
     });
 
-    const token = await this.jwtService.signAsync({
+    const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       email: user.email,
     });
 
-    return { user, accessToken: token };
+    return {
+      user: { id: user.id, name: user.username, email: user.email },
+      accessToken,
+    };
   }
 
   async login(dto: LoginDto) {
@@ -49,46 +50,44 @@ export class AuthService {
       where: { email: dto.email },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    if (!user) throw new UnauthorizedException('Invalid credentials');
 
-    const ok = await bcrypt.compare(dto.password, user.password);
-    if (!ok) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    const ok = await bcrypt.compare(dto.password, user.password_hash);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
 
-    const token = await this.jwtService.signAsync({
+    const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       email: user.email,
     });
 
     return {
-      user: { id: user.id, name: user.name, email: user.email },
-      accessToken: token,
+      user: { id: user.id, name: user.username, email: user.email },
+      accessToken,
     };
   }
 
-  async me(userId: number) {
+  async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true },
+      select: { id: true, username: true, email: true },
     });
-    return user;
+
+    if (!user) throw new UnauthorizedException('User not found');
+    return { id: user.id, name: user.username, email: user.email };
   }
 
-  async changePassword(userId: number, oldPassword: string, newPassword: string) {
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
 
-    const ok = await bcrypt.compare(oldPassword, user.password);
+    const ok = await bcrypt.compare(oldPassword, user.password_hash);
     if (!ok) throw new UnauthorizedException('Old password is incorrect');
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password_hash: hashedPassword },
     });
 
     return { message: 'Password changed successfully' };
