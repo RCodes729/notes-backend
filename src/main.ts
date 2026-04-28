@@ -5,13 +5,21 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://notes-app-chi-coral.vercel.app',
-    ],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // Postman/curl
+
+      if (origin === 'http://localhost:3000' || origin === 'http://localhost:3001') {
+        return callback(null, true);
+      }
+
+      if (origin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked: ${origin}`), false);
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
