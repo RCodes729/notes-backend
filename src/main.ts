@@ -17,10 +17,7 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Ensure OPTIONS preflight is answered for every route
-  const httpAdapter = app.getHttpAdapter();
-  const instance = httpAdapter.getInstance();
-  instance.options('*', (_req: any, res: any) => res.sendStatus(204));
+  
 
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port, '0.0.0.0'); // IMPORTANT on Railway
