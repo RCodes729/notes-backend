@@ -10,18 +10,19 @@ async function bootstrap() {
       if (origin === 'http://localhost:3000' || origin === 'http://localhost:3001')
         return callback(null, true);
       if (origin.endsWith('.vercel.app')) return callback(null, true);
-      return callback(new Error(`CORS blocked: ${origin}`), false);
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // IMPORTANT: ensure OPTIONS preflight is answered for every route
+  // Ensure OPTIONS is handled
   const httpAdapter = app.getHttpAdapter();
   const instance = httpAdapter.getInstance();
   instance.options('*', (_req: any, res: any) => res.sendStatus(204));
 
-  await app.listen(process.env.PORT || 3000);
+  const port = Number(process.env.PORT) || 3000;
+  await app.listen(port, '0.0.0.0'); // <-- THIS is the key change
 }
 bootstrap();
