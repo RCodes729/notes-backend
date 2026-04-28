@@ -21,15 +21,25 @@ export class NotesService {
   }
 
   async create(body: any, userId: string) {
-    const workspaceId = process.env.DEFAULT_WORKSPACE_ID;
-    if (!workspaceId) {
-      throw new NotFoundException('DEFAULT_WORKSPACE_ID missing in environment');
+    // FIX: Automatically find the user's workspace, or create one if it's missing!
+    let workspace = await this.prisma.workspaces.findFirst({
+      where: { owner_id: userId }
+    });
+
+    if (!workspace) {
+      workspace = await this.prisma.workspaces.create({
+        data: {
+          id: randomUUID(),
+          name: 'Personal Workspace',
+          owner_id: userId,
+        }
+      });
     }
 
     return this.prisma.note.create({
       data: {
         id: randomUUID(),
-        workspace_id: workspaceId,
+        workspace_id: workspace.id,
         author_id: userId,
         title: (body.title || 'Untitled').trim(),
         content_text: body.content_text || '',
